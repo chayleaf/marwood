@@ -2,7 +2,7 @@ use crate::error::Error;
 use crate::error::Error::InvalidStackIndex;
 use crate::vm::vcell::VCell;
 use log::trace;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 /// Stack
 ///
@@ -139,7 +139,7 @@ impl Stack {
     /// Push
     ///
     /// Push a value at the top of the stack, incrementing SP
-    pub fn push<T: Into<VCell> + Display>(&mut self, vcell: T) {
+    pub fn push<T: Into<VCell> + Debug + Display>(&mut self, vcell: T) {
         match self.stack.get_mut(self.sp + 1) {
             Some(slot) => {
                 *slot = vcell.into();
