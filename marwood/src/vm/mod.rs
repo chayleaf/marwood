@@ -31,17 +31,17 @@ const HEAP_CHUNK_SIZE: usize = 8192;
 #[derive(Debug)]
 pub struct Vm {
     /// The heap and global environment
-    heap: Heap,
-    globenv: GlobalEnvironment,
+    pub heap: Heap,
+    pub globenv: GlobalEnvironment,
 
     /// The current program stack
-    stack: Stack,
+    pub stack: Stack,
 
     /// Registers
-    acc: VCell,
-    ep: HeapRef,
-    ip: (HeapRef, usize),
-    bp: usize,
+    pub acc: VCell,
+    pub ep: HeapRef,
+    pub ip: (HeapRef, usize),
+    pub bp: usize,
 
     /// System Interface (display, write, etc).
     sys: Box<dyn SystemInterface>,
