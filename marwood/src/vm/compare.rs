@@ -46,6 +46,7 @@ impl Vm {
             (VCell::Pair(_, _), VCell::Pair(_, _)) => Ok(left == right),
             (VCell::Char(left), VCell::Char(right)) => Ok(left == right),
             (VCell::String(left), VCell::String(right)) => Ok(left == right),
+            (VCell::Symbol(left), VCell::Symbol(right)) => Ok(left == right),
             _ => Ok(false),
         }
     }
