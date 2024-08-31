@@ -486,19 +486,19 @@ impl Vm {
 
         self.globenv
             .iter_bindings()
-            .for_each(|it| self.heap.mark(*it));
+            .for_each(|it| self.heap.mark(*it, false));
 
         self.globenv
             .iter_slots()
             .filter_map(|it| it.as_ptr().ok())
-            .for_each(|it| self.heap.mark(it));
+            .for_each(|it| self.heap.mark(it, false));
 
         self.stack
             .iter_to_sp()
-            .for_each(|it| self.heap.mark_vcell(it));
-        self.heap.mark_vcell(&self.acc);
-        self.heap.mark(self.ip.0);
-        self.heap.mark(self.ep);
+            .for_each(|it| self.heap.mark_vcell(it, false));
+        self.heap.mark_vcell(&self.acc, false);
+        self.heap.mark(self.ip.0, false);
+        self.heap.mark(self.ep, false);
         self.heap.sweep();
 
         // If after GC the heap utilization is still high, grow the heap.

@@ -206,7 +206,9 @@ impl Heap {
     /// # Arguments
     /// `ptr` - The index of the vcell to return.
     pub fn get_at_index(&self, ptr: usize) -> &VCell {
-        self.heap.get(ptr).expect("heap index out of bounds")
+        self.heap
+            .get(ptr)
+            .unwrap_or_else(|| panic!("heap index {ptr} out of bounds"))
     }
 
     /// Get at Index Mut
@@ -332,7 +334,7 @@ impl Heap {
     ///
     /// # Arguments
     /// `root` - The root vcell to mark
-    pub fn mark(&mut self, root: usize) {
+    pub fn mark(&mut self, root: usize, force: bool) {
         let mut ptr = root;
         loop {
             let vcell = match self.heap.get(ptr) {
@@ -343,44 +345,47 @@ impl Heap {
             };
 
             // Avoid cyclic graphs by following already marked paths
-            if self.heap_map.is_marked(ptr) {
+            if self
+                .heap_map
+                .is_marked_as(ptr, if force { State::ForceUsed } else { State::Used })
+            {
                 return;
             } else {
-                self.heap_map.mark(ptr);
+                self.heap_map.mark(ptr, force);
             }
 
-            //trace!("mark {} => {}", ptr, vcell);
+            // trace!("mark {} => {}", ptr, vcell);
             match vcell {
                 VCell::Pair(car, cdr) => {
-                    self.mark(car);
+                    self.mark(car, force);
                     ptr = cdr;
                 }
                 VCell::Ptr(cdr) => {
                     ptr = cdr;
                 }
                 VCell::Continuation(cont) => {
-                    self.mark_continuation(&cont);
+                    self.mark_continuation(&cont, force);
                 }
                 VCell::Lambda(ptr) => {
-                    self.mark_lambda(&ptr);
+                    self.mark_lambda(&ptr, force);
                 }
                 VCell::Closure(lambda, env) => {
-                    self.mark(lambda);
-                    self.mark(env);
+                    self.mark(lambda, force);
+                    self.mark(env, force);
                 }
                 VCell::LexicalEnv(env) => {
                     let env = env.as_ref();
                     for it in 0..env.slot_len() {
-                        self.mark_vcell(&env.get(it));
+                        self.mark_vcell(&env.get(it), force);
                     }
                 }
                 VCell::Vector(vector) => {
                     for idx in 0..vector.len() {
                         let vcell = vector.get(idx).unwrap();
-                        self.mark_vcell(&vcell);
+                        self.mark_vcell(&vcell, force);
                     }
                 }
-                VCell::EnvironmentPointer(ptr) => self.mark(ptr),
+                VCell::EnvironmentPointer(ptr) => self.mark(ptr, force),
                 VCell::Acc
                 | VCell::ArgumentCount(_)
                 | VCell::BasePointer(_)
@@ -404,36 +409,36 @@ impl Heap {
         }
     }
 
-    pub fn mark_vcell(&mut self, vcell: &VCell) {
+    pub fn mark_vcell(&mut self, vcell: &VCell, force: bool) {
         match vcell {
             VCell::InstructionPointer(lambda, _) => {
-                self.mark(*lambda);
+                self.mark(*lambda, force);
             }
             VCell::Continuation(cont) => {
-                self.mark_continuation(cont);
+                self.mark_continuation(cont, force);
             }
-            VCell::Lambda(lambda) => self.mark_lambda(lambda.as_ref()),
+            VCell::Lambda(lambda) => self.mark_lambda(lambda.as_ref(), force),
             VCell::Closure(lambda, env) => {
-                self.mark(*lambda);
-                self.mark(*env)
+                self.mark(*lambda, force);
+                self.mark(*env, force)
             }
             VCell::Pair(car, cdr) => {
-                self.mark(*car);
-                self.mark(*cdr);
+                self.mark(*car, force);
+                self.mark(*cdr, force);
             }
             VCell::Ptr(ptr) => {
-                self.mark(*ptr);
+                self.mark(*ptr, force);
             }
             VCell::LexicalEnvPtr(ptr, _) => {
-                self.mark(*ptr);
+                self.mark(*ptr, force);
             }
             VCell::Vector(vector) => {
                 for idx in 0..vector.len() {
                     let vcell = vector.get(idx).unwrap();
-                    self.mark_vcell(&vcell);
+                    self.mark_vcell(&vcell, force);
                 }
             }
-            VCell::EnvironmentPointer(ep) => self.mark(*ep),
+            VCell::EnvironmentPointer(ep) => self.mark(*ep, force),
             VCell::Acc
             | VCell::ArgumentCount(_)
             | VCell::BasePointer(_)
@@ -458,31 +463,31 @@ impl Heap {
     /// Mark Continuation
     ///
     /// Iterate the saved VM state in the continuation
-    pub fn mark_continuation(&mut self, cont: &Continuation) {
+    pub fn mark_continuation(&mut self, cont: &Continuation, force: bool) {
         for it in cont.stack().iter() {
-            self.mark_vcell(it);
+            self.mark_vcell(it, force);
         }
-        self.mark(cont.ip().0);
-        self.mark(cont.ep());
+        self.mark(cont.ip().0, force);
+        self.mark(cont.ep(), force);
     }
 
     /// Mark Lambda
     ///
     /// Iterate the lambda byte code and mark any value that contains a reference type
-    pub fn mark_lambda(&mut self, lambda: &Lambda) {
+    pub fn mark_lambda(&mut self, lambda: &Lambda, force: bool) {
         // Mark every bytecode cell
         for it in &lambda.bc {
-            self.mark_vcell(it)
+            self.mark_vcell(it, force)
         }
 
         // Mark every argument (symbol)
         for it in &lambda.args {
-            self.mark_vcell(it);
+            self.mark_vcell(it, force);
         }
 
         // Mark every symbol the envmap refers to
         for it in lambda.envmap.get_map().iter() {
-            self.mark_vcell(&it.0);
+            self.mark_vcell(&it.0, force);
         }
     }
 
@@ -622,7 +627,7 @@ mod tests {
         let mut heap = Heap::new(CHUNK_SIZE);
         let root = heap.put_cell(&cell![42]);
         assert_eq!(heap.heap_map.get(0), Some(State::Allocated));
-        heap.mark(root.as_ptr().unwrap());
+        heap.mark(root.as_ptr().unwrap(), false);
         assert_eq!(heap.heap_map.get(0), Some(State::Used));
         heap.sweep();
         assert_eq!(heap.free_list.len(), CHUNK_SIZE - 1);
@@ -637,7 +642,7 @@ mod tests {
         assert_eq!(heap.heap_map.get(0), Some(State::Allocated));
         assert_eq!(heap.heap_map.get(1), Some(State::Allocated));
         assert_eq!(heap.heap_map.get(2), Some(State::Allocated));
-        heap.mark(root.as_ptr().unwrap());
+        heap.mark(root.as_ptr().unwrap(), false);
         assert_eq!(heap.heap_map.get(0), Some(State::Used));
         assert_eq!(heap.heap_map.get(1), Some(State::Used));
         assert_eq!(heap.heap_map.get(2), Some(State::Used));
@@ -652,7 +657,7 @@ mod tests {
         let mut heap = Heap::new(CHUNK_SIZE);
         let car = heap.put_cell(&cell![100]);
         let pair = heap.put(VCell::Pair(car.as_ptr().unwrap(), 1));
-        heap.mark(pair.as_ptr().unwrap());
+        heap.mark(pair.as_ptr().unwrap(), false);
         heap.sweep();
         assert_eq!(heap.free_list.len(), CHUNK_SIZE - 2);
     }

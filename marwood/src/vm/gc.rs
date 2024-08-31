@@ -36,6 +36,7 @@ pub enum State {
     Free,
     Allocated,
     Used,
+    ForceUsed,
 }
 
 impl State {
@@ -44,6 +45,7 @@ impl State {
             State::Free => 0b00,
             State::Allocated => 0b01,
             State::Used => 0b10,
+            State::ForceUsed => 0b11,
         }
     }
 }
@@ -54,6 +56,7 @@ impl From<u8> for State {
             0b00 => State::Free,
             0b01 => State::Allocated,
             0b10 => State::Used,
+            0b11 => State::ForceUsed,
             _ => panic!("invalid gc state"),
         }
     }
@@ -116,12 +119,12 @@ impl Map {
         }
     }
 
-    pub fn mark(&mut self, index: usize) {
-        self.set(index, State::Used);
+    pub fn mark(&mut self, index: usize, force: bool) {
+        self.set(index, if force { State::ForceUsed } else { State::Used });
     }
 
-    pub fn is_marked(&self, index: usize) -> bool {
-        matches!(self.get(index), Some(State::Used))
+    pub fn is_marked_as(&self, index: usize, state: State) -> bool {
+        self.get(index) == Some(state)
     }
 
     pub fn capacity(&self) -> usize {
