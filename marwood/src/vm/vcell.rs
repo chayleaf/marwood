@@ -69,7 +69,7 @@ pub enum VCell {
 #[derive(Clone)]
 pub struct BuiltInProc {
     desc: &'static str,
-    proc: fn(&mut Vm) -> Result<VCell, Error>,
+    proc: Rc<dyn Fn(&mut Vm) -> Result<VCell, Error>>,
 }
 
 impl BuiltInProc {
@@ -91,8 +91,8 @@ impl Debug for BuiltInProc {
 impl PartialEq<Self> for BuiltInProc {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(
-            self.proc as *mut fn(&mut Vm),
-            other.proc as *mut fn(&mut Vm),
+            self.proc.as_ref() as *const _,
+            other.proc.as_ref() as *const _,
         ) && self.desc().eq(other.desc())
     }
 }
@@ -169,8 +169,14 @@ impl VCell {
         VCell::Number(num.into())
     }
 
-    pub fn builtin(desc: &'static str, proc: fn(&mut Vm) -> Result<VCell, Error>) -> VCell {
-        VCell::BuiltInProc(Rc::new(BuiltInProc { desc, proc }))
+    pub fn builtin(
+        desc: &'static str,
+        proc: impl 'static + Fn(&mut Vm) -> Result<VCell, Error>,
+    ) -> VCell {
+        VCell::BuiltInProc(Rc::new(BuiltInProc {
+            desc,
+            proc: Rc::new(proc),
+        }))
     }
 
     pub fn undefined() -> VCell {
