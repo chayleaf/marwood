@@ -23,6 +23,15 @@ impl Vm {
     }
 
     pub fn run_count(&mut self, count: usize) -> Result<Option<Cell>, Error> {
+        let Some(_acc) = self.run_count_vcell(count)? else {
+            return Ok(None);
+        };
+        let cell = self.heap.get_as_cell(&self.acc);
+        self.stack.clear();
+        self.run_gc();
+        Ok(Some(cell))
+    }
+    pub fn run_count_vcell(&mut self, count: usize) -> Result<Option<&VCell>, Error> {
         self.last_stacktrace = None;
         let mut cycles = 0;
         loop {
@@ -49,10 +58,7 @@ impl Vm {
             }
         }
         trace!("cycles: {}", cycles);
-        let cell = self.heap.get_as_cell(&self.acc);
-        self.stack.clear();
-        self.run_gc();
-        Ok(Some(cell))
+        Ok(Some(&self.acc))
     }
 
     /// Run One
