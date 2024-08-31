@@ -51,9 +51,18 @@ pub enum Error {
     #[error("string index {0} out of range of 0..{}", .1 - 1)]
     InvalidStringIndex(usize, usize),
 
+    #[error("{0}")]
+    Other(String),
+
     #[error(transparent)]
     ParseError(#[from] parse::Error),
 
     #[error(transparent)]
     LexError(#[from] lex::Error),
+}
+
+impl From<String> for Error {
+    fn from(value: String) -> Self {
+        Self::Other(value)
+    }
 }
